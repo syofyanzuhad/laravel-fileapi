@@ -195,7 +195,7 @@ class FileApi
         $img = $this->setTmpImage($upload_file);
 
         Storage::put(
-            $this->$publicpath . $filename,
+            $this->publicpath . $filename,
             file_get_contents($upload_file->getRealPath()),
             $this->visibility
         );

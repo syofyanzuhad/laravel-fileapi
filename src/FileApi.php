@@ -16,6 +16,7 @@ class FileApi
     const SIZE_SMALL = 'S';
 
     protected $basepath;
+    protected $publicpath;
     protected $default_sizes = ['S' => '96x96', 'M' => '256x256', 'L' => '480x480'];
     protected $thumb_sizes = null;
     protected $shouldCropThumb = false;
@@ -33,6 +34,7 @@ class FileApi
         }
 
         $this->setBasePath($basepath);
+        $this->publicpath = 'public/' . $this->basepath;
 
         $this->visibility = $visibility;
     }
@@ -193,7 +195,7 @@ class FileApi
         $img = $this->setTmpImage($upload_file);
 
         Storage::put(
-            $this->basepath . $filename,
+            $this->$publicpath . $filename,
             file_get_contents($upload_file->getRealPath()),
             $this->visibility
         );
@@ -266,14 +268,14 @@ class FileApi
                 $size_name = $size_code;
             }
 
-            $thumb_name   = $this->basepath . $original_name . '_' . $size_name . '.' . $suffix;
+            $thumb_name   = $this->publicpath . $original_name . '_' . $size_name . '.' . $suffix;
             $main_image   = $original_name . '.' . $suffix;
             $tmp_filename = 'tmp' . DIRECTORY_SEPARATOR . $main_image;
 
             $tmp_thumb = $this->resizeOrCropThumb($img, $size);
 
             // save tmp image
-            Storage::disk('local')->put($tmp_filename, Storage::get($this->basepath . $main_image));
+            Storage::disk('local')->put($tmp_filename, Storage::get($this->publicpath . $main_image));
             $tmp_path = Storage::disk('local')->getDriver()->getAdapter()->getPathPrefix();
 
             // save thumbnail image
@@ -312,7 +314,7 @@ class FileApi
         $tmp_path = Storage::disk('local')->getDriver()->getAdapter()->getPathPrefix();
 
 
-        $watermark_filename   = $this->basepath . $original_name . '_W' .  '.' . $suffix;
+        $watermark_filename   = $this->publicpath . $original_name . '_W' .  '.' . $suffix;
         // save thumbnail image
         imagepng($image, $tmp_path . $tmp_filename);
         $tmp_file = Storage::disk('local')->get($tmp_filename);
@@ -416,7 +418,7 @@ class FileApi
 
     private function saveCompress($img, $original_name, $suffix)
     {
-        $compress_name   = $this->basepath . $original_name . '_CP.' . $suffix;
+        $compress_name   = $this->publicpath . $original_name . '_CP.' . $suffix;
         $main_image   = $original_name . '.' . $suffix;
         $tmp_filename = 'tmp/' . $main_image;
 

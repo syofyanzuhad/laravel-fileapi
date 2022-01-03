@@ -66,7 +66,7 @@ class FileApi
 
         if ($size != self::SIZE_ORIGINAL
             && Storage::exists($this->publicpath . $file[0] . '_' . $size . '.' . $file[1])) {
-            $file_path = $this->publicpath . $file[0] . '_' . $size . '.' . $file[1];
+            $file_path = $this->basepath . $file[0] . '_' . $size . '.' . $file[1];
         }
 
         if (\Config::get('filesystems.default') == 's3') {
@@ -122,9 +122,9 @@ class FileApi
                 $this->basepath . $filename
             );
         } elseif (config('filesystems.default') == 'gcs') {
-            return Storage::getDriver()->getAdapter()->getUrl($this->publicpath . $filename);
+            return Storage::getDriver()->getAdapter()->getUrl($this->basepath . $filename);
         } else {
-            return $this->publicpath . $filename;
+            return url($this->basepath . $filename);
         }
     }
 

@@ -65,8 +65,8 @@ class FileApi
         $file_path = $this->basepath . $filename;
 
         if ($size != self::SIZE_ORIGINAL
-            && Storage::exists($this->basepath . $file[0] . '_' . $size . '.' . $file[1])) {
-            $file_path = $this->basepath . $file[0] . '_' . $size . '.' . $file[1];
+            && Storage::exists($this->publicpath . $file[0] . '_' . $size . '.' . $file[1])) {
+            $file_path = $this->publicpath . $file[0] . '_' . $size . '.' . $file[1];
         }
 
         if (\Config::get('filesystems.default') == 's3') {
@@ -103,7 +103,7 @@ class FileApi
 
     public function getPath($filename)
     {
-        if (mb_substr($this->basepath, -1, 1, 'utf8') != DIRECTORY_SEPARATOR) {
+        if (mb_substr($this->publicpath, -1, 1, 'utf8') != DIRECTORY_SEPARATOR) {
             $this->basepath .= DIRECTORY_SEPARATOR;
         }
 
@@ -111,7 +111,7 @@ class FileApi
             $filename = mb_substr($filename, 1, null, 'utf8');
         }
 
-        return $this->basepath . $filename;
+        return $this->publicpath . $filename;
     }
 
     public function getUrl($filename)
@@ -122,16 +122,16 @@ class FileApi
                 $this->basepath . $filename
             );
         } elseif (config('filesystems.default') == 'gcs') {
-            return Storage::getDriver()->getAdapter()->getUrl($this->basepath . $filename);
+            return Storage::getDriver()->getAdapter()->getUrl($this->publicpath . $filename);
         } else {
-            return $this->basepath . $filename;
+            return $this->publicpath . $filename;
         }
     }
 
     public function getResponse($filename, $headers = [])
     {
         try {
-            $path = $this->basepath . $filename;
+            $path = $this->publicpath . $filename;
             $file = Storage::get($path);
             $filetime = Storage::lastModified($path);
             $etag = md5($filetime);
@@ -166,7 +166,7 @@ class FileApi
         $origin_name = substr($filename, 0, $dot);
 
         // Find all images in basepath
-        $allFiles = Storage::files($this->basepath);
+        $allFiles = Storage::files($this->publicpath);
         $files = array_filter($allFiles, function ($file) use ($origin_name) {
             return preg_match('/^(.*)'.$origin_name.'(.*)$/', $file);
         });

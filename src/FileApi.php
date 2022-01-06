@@ -111,7 +111,7 @@ class FileApi
             $filename = mb_substr($filename, 1, null, 'utf8');
         }
 
-        return $this->publicpath . $filename;
+        return $this->basepath . $filename;
     }
 
     public function getUrl($filename)

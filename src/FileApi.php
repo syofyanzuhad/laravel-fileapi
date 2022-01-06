@@ -101,7 +101,7 @@ class FileApi
         return $file;
     }
 
-    public function getPath($filename)
+    public function getPath($filename, $size = self::SIZE_LARGE)
     {
         if (empty($filename)) {
             return '';

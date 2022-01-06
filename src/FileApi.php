@@ -103,23 +103,32 @@ class FileApi
 
     public function getPath($filename)
     {
-        if (mb_substr($this->publicpath, -1, 1, 'utf8') != DIRECTORY_SEPARATOR) {
-            $this->basepath .= DIRECTORY_SEPARATOR;
+        if (empty($filename)) {
+            return '';
+        }
+        // Cut original file name
+        $file = explode('.', $filename);
+        $file_path = '';
+
+        if (empty($filename)) {
+            return '';
         }
 
         $file_path = $this->basepath . $filename;
 
-        if (preg_match('/^\//', $filename)) {
-            $filename = mb_substr($filename, 1, null, 'utf8');
-        }
-
-        // Cut original file name
-        if ($size != self::SIZE_ORIGINAL && Storage::exists($this->publicpath . $file[0] . '_' . $size . '.' . $file[1])) {
-            $file = explode('.', $filename);
+        if ($size != self::SIZE_ORIGINAL
+            && Storage::exists($this->publicpath . $file[0] . '_' . $size . '.' . $file[1])) {
             $file_path = $this->basepath . $file[0] . '_' . $size . '.' . $file[1];
         }
 
-        return $file_path;
+        if (\Config::get('filesystems.default') == 's3') {
+            return Storage::getDriver()->getAdapter()->getClient()->getObjectUrl(
+                Storage::getDriver()->getAdapter()->getBucket(),
+                $this->basepath . $filename
+            );
+        } else {
+            return $file_path;
+        }
     }
 
     public function getUrl($filename)

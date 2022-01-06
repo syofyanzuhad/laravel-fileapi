@@ -107,11 +107,19 @@ class FileApi
             $this->basepath .= DIRECTORY_SEPARATOR;
         }
 
+        $file_path = $this->basepath . $filename;
+
         if (preg_match('/^\//', $filename)) {
             $filename = mb_substr($filename, 1, null, 'utf8');
         }
 
-        return $this->basepath . $filename;
+        // Cut original file name
+        if ($size != self::SIZE_ORIGINAL && Storage::exists($this->publicpath . $file[0] . '_' . $size . '.' . $file[1])) {
+            $file = explode('.', $filename);
+            $file_path = $this->basepath . $file[0] . '_' . $size . '.' . $file[1];
+        }
+
+        return $file_path;
     }
 
     public function getUrl($filename)

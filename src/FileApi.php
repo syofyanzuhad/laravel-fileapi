@@ -211,10 +211,10 @@ class FileApi
 
         $img = $this->setTmpImage($upload_file);
 
-        Storage::put(
-            $this->publicpath . $filename,
+        Storage::putFileAs(
+            $this->publicpath,
             file_get_contents($upload_file->getRealPath()),
-            $this->visibility
+            $filename
         );
 
         File::delete($upload_file->getRealPath());

@@ -214,10 +214,8 @@ class FileApi
         Storage::put(
             $this->publicpath.$filename,
             file_get_contents($upload_file->getRealPath()),
-            
-        );
 
-        File::delete($upload_file->getRealPath());
+        );
 
         if (!is_null($img) && !empty($this->getThumbSizes())) {
             $this->saveThumb($img, $original_name, $suffix);
@@ -226,6 +224,8 @@ class FileApi
                 $this->mergeWatermark($img, $original_name, $suffix);
             }
         }
+
+        File::delete($upload_file->getRealPath());
 
         return $filename;
     }
@@ -437,17 +437,58 @@ class FileApi
     {
         $compress_name   = $this->publicpath . $original_name . '_CP.' . $suffix;
         $main_image   = $original_name . '.' . $suffix;
-        $tmp_filename = 'tmp/' . $main_image;
+        $tmp_filename = $this->publicpath . $main_image;
 
         $tmp_path = Storage::disk('local')->getDriver()->getAdapter()->getPathPrefix();
 
         // save thumbnail image
-        imagejpeg($img, $tmp_path . $tmp_filename, config('fileapi.compress_quality', $this->compress_quality));
+        switch ($suffix) {
+            case 'png':
+                $tmp_filename = $this->compress_png($tmp_path . $tmp_filename);
+                break;
+            case 'gif':
+                break;
+            case 'jpg':
+            case 'jpeg':
+            default:
+                imagejpeg($img, $tmp_path . $tmp_filename, config('fileapi.compress_quality', $this->compress_quality));
+                break;
+        }
 
-        $tmp_file = Storage::disk('local')->get($tmp_filename);
-        Storage::put($compress_name, $tmp_file);
+        Storage::put($compress_name, $tmp_filename);
 
         // remove tmp image
-        Storage::disk('local')->delete($tmp_filename);
+//        Storage::disk('local')->delete($tmp_filename);
+    }
+
+    /**
+     * Optimizes PNG file with pngquant 1.8 or later (reduces file size of 24-bit/32-bit PNG images).
+     *
+     * You need to install pngquant 1.8 on the server (ancient version 1.0 won't work).
+     * There's package for Debian/Ubuntu and RPM for other distributions on http://pngquant.org
+     *
+     * @param $path_to_png_file string - path to any PNG file, e.g. $_FILE['file']['tmp_name']
+     * @param $max_quality int - conversion quality, useful values from 60 to 100 (smaller number = smaller file)
+     * @return string - content of PNG file after conversion
+     */
+    private function compress_png($path_to_png_file, $max_quality = 90)
+    {
+        if (!file_exists($path_to_png_file)) {
+            throw new Exception("File does not exist: $path_to_png_file");
+        }
+
+        // guarantee that quality won't be worse than that.
+        $min_quality = 60;
+
+        // '-' makes it use stdout, required to save to $compressed_png_content variable
+        // '<' makes it read from the given file path
+        // escapeshellarg() makes this safe to use with any path
+        $compressed_png_content = shell_exec("pngquant --quality=$min_quality-$max_quality - < ".escapeshellarg(    $path_to_png_file));
+
+        if (!$compressed_png_content) {
+            throw new Exception("Conversion to compressed PNG failed. Is pngquant 1.8+ installed on the server?");
+        }
+
+        return $compressed_png_content;
     }
 }

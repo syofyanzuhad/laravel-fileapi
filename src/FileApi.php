@@ -437,28 +437,23 @@ class FileApi
     {
         $compress_name   = $this->publicpath . $original_name . '_CP.' . $suffix;
         $main_image   = $original_name . '.' . $suffix;
-        $tmp_filename = $this->publicpath . $main_image;
+        $tmp_filename = 'tmp' . DIRECTORY_SEPARATOR . $main_image;
 
         $tmp_path = Storage::disk('local')->getDriver()->getAdapter()->getPathPrefix();
 
+        Storage::disk('local')->put($tmp_filename, Storage::get($this->publicpath . $main_image));
         // save thumbnail image
-        switch ($suffix) {
-            case 'png':
-                $tmp_filename = $this->compress_png($tmp_path . $tmp_filename);
-                break;
-            case 'gif':
-                break;
-            case 'jpg':
-            case 'jpeg':
-            default:
-                imagejpeg($img, $tmp_path . $tmp_filename, config('fileapi.compress_quality', $this->compress_quality));
-                break;
+        if ($suffix == 'png') {
+            $tmp_file = $this->compress_png($tmp_path . $tmp_filename);
+        } else {
+            imagejpeg($img, $tmp_path . $tmp_filename, config('fileapi.compress_quality', $this->compress_quality));
         }
+        $tmp_file = Storage::disk('local')->get($tmp_filename);
 
-        Storage::put($compress_name, $tmp_filename);
+        Storage::put($compress_name, $tmp_file);
 
         // remove tmp image
-//        Storage::disk('local')->delete($tmp_filename);
+        Storage::disk('local')->delete($tmp_filename);
     }
 
     /**

@@ -16,6 +16,7 @@ class FileApi
     const SIZE_SMALL = 'S';
 
     protected $basepath;
+    protected $publicpath;
     protected $default_sizes = ['S' => '96x96', 'M' => '256x256', 'L' => '480x480'];
     protected $thumb_sizes = null;
     protected $shouldCropThumb = false;
@@ -33,6 +34,7 @@ class FileApi
         }
 
         $this->setBasePath($basepath);
+        $this->publicpath = 'public/' . $this->basepath;
 
         $this->visibility = $visibility;
     }
@@ -63,7 +65,7 @@ class FileApi
         $file_path = $this->basepath . $filename;
 
         if ($size != self::SIZE_ORIGINAL
-            && Storage::exists($this->basepath . $file[0] . '_' . $size . '.' . $file[1])) {
+            && Storage::exists($this->publicpath . $file[0] . '_' . $size . '.' . $file[1])) {
             $file_path = $this->basepath . $file[0] . '_' . $size . '.' . $file[1];
         }
 
@@ -99,17 +101,34 @@ class FileApi
         return $file;
     }
 
-    public function getPath($filename)
+    public function getPath($filename, $size = self::SIZE_LARGE)
     {
-        if (mb_substr($this->basepath, -1, 1, 'utf8') != DIRECTORY_SEPARATOR) {
-            $this->basepath .= DIRECTORY_SEPARATOR;
+        if (empty($filename)) {
+            return '';
+        }
+        // Cut original file name
+        $file = explode('.', $filename);
+        $file_path = '';
+
+        if (empty($filename)) {
+            return '';
         }
 
-        if (preg_match('/^\//', $filename)) {
-            $filename = mb_substr($filename, 1, null, 'utf8');
+        $file_path = $this->basepath . $filename;
+
+        if ($size != self::SIZE_ORIGINAL
+            && Storage::exists($this->publicpath . $file[0] . '_' . $size . '.' . $file[1])) {
+            $file_path = $this->basepath . $file[0] . '_' . $size . '.' . $file[1];
         }
 
-        return $this->basepath . $filename;
+        if (\Config::get('filesystems.default') == 's3') {
+            return Storage::getDriver()->getAdapter()->getClient()->getObjectUrl(
+                Storage::getDriver()->getAdapter()->getBucket(),
+                $this->basepath . $filename
+            );
+        } else {
+            return $file_path;
+        }
     }
 
     public function getUrl($filename)
@@ -122,14 +141,14 @@ class FileApi
         } elseif (config('filesystems.default') == 'gcs') {
             return Storage::getDriver()->getAdapter()->getUrl($this->basepath . $filename);
         } else {
-            return $this->basepath . $filename;
+            return url($this->basepath . $filename);
         }
     }
 
     public function getResponse($filename, $headers = [])
     {
         try {
-            $path = $this->basepath . $filename;
+            $path = $this->publicpath . $filename;
             $file = Storage::get($path);
             $filetime = Storage::lastModified($path);
             $etag = md5($filetime);
@@ -164,7 +183,7 @@ class FileApi
         $origin_name = substr($filename, 0, $dot);
 
         // Find all images in basepath
-        $allFiles = Storage::files($this->basepath);
+        $allFiles = Storage::files($this->publicpath);
         $files = array_filter($allFiles, function ($file) use ($origin_name) {
             return preg_match('/^(.*)'.$origin_name.'(.*)$/', $file);
         });
@@ -193,12 +212,10 @@ class FileApi
         $img = $this->setTmpImage($upload_file);
 
         Storage::put(
-            $this->basepath . $filename,
+            $this->publicpath.$filename,
             file_get_contents($upload_file->getRealPath()),
-            $this->visibility
-        );
 
-        File::delete($upload_file->getRealPath());
+        );
 
         if (!is_null($img) && !empty($this->getThumbSizes())) {
             $this->saveThumb($img, $original_name, $suffix);
@@ -207,6 +224,8 @@ class FileApi
                 $this->mergeWatermark($img, $original_name, $suffix);
             }
         }
+
+        File::delete($upload_file->getRealPath());
 
         return $filename;
     }
@@ -266,14 +285,14 @@ class FileApi
                 $size_name = $size_code;
             }
 
-            $thumb_name   = $this->basepath . $original_name . '_' . $size_name . '.' . $suffix;
+            $thumb_name   = $this->publicpath . $original_name . '_' . $size_name . '.' . $suffix;
             $main_image   = $original_name . '.' . $suffix;
             $tmp_filename = 'tmp' . DIRECTORY_SEPARATOR . $main_image;
 
             $tmp_thumb = $this->resizeOrCropThumb($img, $size);
 
             // save tmp image
-            Storage::disk('local')->put($tmp_filename, Storage::get($this->basepath . $main_image));
+            Storage::disk('local')->put($tmp_filename, Storage::get($this->publicpath . $main_image));
             $tmp_path = Storage::disk('local')->getDriver()->getAdapter()->getPathPrefix();
 
             // save thumbnail image
@@ -312,7 +331,7 @@ class FileApi
         $tmp_path = Storage::disk('local')->getDriver()->getAdapter()->getPathPrefix();
 
 
-        $watermark_filename   = $this->basepath . $original_name . '_W' .  '.' . $suffix;
+        $watermark_filename   = $this->publicpath . $original_name . '_W' .  '.' . $suffix;
         // save thumbnail image
         imagepng($image, $tmp_path . $tmp_filename);
         $tmp_file = Storage::disk('local')->get($tmp_filename);
@@ -416,19 +435,55 @@ class FileApi
 
     private function saveCompress($img, $original_name, $suffix)
     {
-        $compress_name   = $this->basepath . $original_name . '_CP.' . $suffix;
+        $compress_name   = $this->publicpath . $original_name . '_CP.' . $suffix;
         $main_image   = $original_name . '.' . $suffix;
-        $tmp_filename = 'tmp/' . $main_image;
+        $tmp_filename = 'tmp' . DIRECTORY_SEPARATOR . $main_image;
 
         $tmp_path = Storage::disk('local')->getDriver()->getAdapter()->getPathPrefix();
 
+        Storage::disk('local')->put($tmp_filename, Storage::get($this->publicpath . $main_image));
         // save thumbnail image
-        imagejpeg($img, $tmp_path . $tmp_filename, config('fileapi.compress_quality', $this->compress_quality));
-
+        if ($suffix == 'png') {
+            $tmp_file = $this->compress_png($tmp_path . $tmp_filename);
+        } else {
+            imagejpeg($img, $tmp_path . $tmp_filename, config('fileapi.compress_quality', $this->compress_quality));
+        }
         $tmp_file = Storage::disk('local')->get($tmp_filename);
+
         Storage::put($compress_name, $tmp_file);
 
         // remove tmp image
         Storage::disk('local')->delete($tmp_filename);
+    }
+
+    /**
+     * Optimizes PNG file with pngquant 1.8 or later (reduces file size of 24-bit/32-bit PNG images).
+     *
+     * You need to install pngquant 1.8 on the server (ancient version 1.0 won't work).
+     * There's package for Debian/Ubuntu and RPM for other distributions on http://pngquant.org
+     *
+     * @param $path_to_png_file string - path to any PNG file, e.g. $_FILE['file']['tmp_name']
+     * @param $max_quality int - conversion quality, useful values from 60 to 100 (smaller number = smaller file)
+     * @return string - content of PNG file after conversion
+     */
+    private function compress_png($path_to_png_file, $max_quality = 90)
+    {
+        if (!file_exists($path_to_png_file)) {
+            throw new Exception("File does not exist: $path_to_png_file");
+        }
+
+        // guarantee that quality won't be worse than that.
+        $min_quality = 60;
+
+        // '-' makes it use stdout, required to save to $compressed_png_content variable
+        // '<' makes it read from the given file path
+        // escapeshellarg() makes this safe to use with any path
+        $compressed_png_content = shell_exec("pngquant --quality=$min_quality-$max_quality - < ".escapeshellarg(    $path_to_png_file));
+
+        if (!$compressed_png_content) {
+            throw new Exception("Conversion to compressed PNG failed. Is pngquant 1.8+ installed on the server?");
+        }
+
+        return $compressed_png_content;
     }
 }
